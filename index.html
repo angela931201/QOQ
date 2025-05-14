@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 飲料推薦對話</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600&display=swap');
+        body {
+            font-family: 'Baloo 2', 'Microsoft JhengHei', cursive, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            margin: 0; padding: 0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 520px;
+            margin: 48px auto 32px auto;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            border: 1px solid #90caf9;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            color: #1565c0;
+            font-family: 'Baloo 2', 'Microsoft JhengHei', cursive, sans-serif;
+            font-size: 2rem;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        #chat {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 16px;
+            background: #e3f2fd;
+            margin-bottom: 16px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .msg {
+            margin: 12px 0;
+            font-size: 1rem;
+            position: relative;
+        }
+        .user {
+            color: #1565c0;
+            font-weight: bold;
+            background: #bbdefb;
+            border-radius: 12px 12px 12px 0;
+            display: inline-block;
+            padding: 8px 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .ai {
+            color: #ffffff;
+            font-weight: bold;
+            background: #42a5f5;
+            border-radius: 12px 12px 0 12px;
+            display: inline-block;
+            padding: 8px 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        #inputArea {
+            display: flex;
+            gap: 8px;
+        }
+        #userInput {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #90caf9;
+            font-size: 1rem;
+            background: #ffffff;
+            color: #1565c0;
+            outline: none;
+            transition: border 0.2s;
+        }
+        #userInput:focus {
+            border: 1px solid #42a5f5;
+        }
+        label {
+            color: #1565c0;
+            font-size: 0.9rem;
+            font-family: 'Baloo 2', 'Microsoft JhengHei', cursive, sans-serif;
+        }
+        #apiKeyInput {
+            border-radius: 8px;
+            border: 1px solid #90caf9;
+            padding: 8px;
+            background: #ffffff;
+            color: #1565c0;
+        }
+        #saveKeyBtn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #42a5f5;
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #saveKeyBtn:active {
+            background: #1e88e5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI 飲料推薦</h1>
+        <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
+            <label for="apiKeyInput" style="color:#1976d2;">Google AI API Key:</label>
+            <input type="password" id="apiKeyInput" placeholder="請輸入API金鑰">
+            <button id="saveKeyBtn">儲存金鑰</button>
+        </div>
+        <div id="chat"></div>
+        <div id="inputArea">
+            <input type="text" id="userInput" placeholder="請輸入你想喝什麼或問AI...">
+        </div>
+    </div>
+    <script>
+    let API_KEY = '';
+    let API_URL = '';
+    const chat = document.getElementById('chat');
+    const userInput = document.getElementById('userInput');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+
+    function appendMsg(sender, text) {
+        const div = document.createElement('div');
+        div.className = 'msg';
+        div.innerHTML = `<span class="${sender}">${sender === 'user' ? '你' : 'AI'}：</span> ${text}`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function setApiKey(key) {
+        API_KEY = key;
+        API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + API_KEY;
+        localStorage.setItem('gemini_api_key', key);
+        apiKeyInput.value = key;
+    }
+
+    saveKeyBtn.onclick = () => {
+        const key = apiKeyInput.value.trim();
+        if (key) {
+            setApiKey(key);
+            appendMsg('ai', 'API 金鑰已儲存，請開始提問！');
+        }
+    };
+
+    apiKeyInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') saveKeyBtn.click();
+    });
+
+    // 自動啟用語音辨識功能
+    window.onload = () => {
+        const saved = localStorage.getItem('gemini_api_key');
+        if (saved) setApiKey(saved);
+        recognition.start(); // 自動啟動語音辨識
+    };
+
+    async function askAI(question) {
+        if (!API_KEY) {
+            appendMsg('ai', '請先輸入 Google Gemini API 金鑰！');
+            return;
+        }
+        appendMsg('user', question);
+        userInput.value = ''; // 清空輸入框內容
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `你是一個飲料推薦專家，請根據使用者的需求推薦飲料，並用繁體中文回答。問題：${question}` }] }]
+                })
+            });
+            const data = await res.json();
+            let aiText = '發生錯誤，請稍後再試';
+            if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                aiText = data.candidates[0].content.parts.map(p => p.text).join('');
+            } else if (data.error && data.error.message) {
+                aiText = 'API 錯誤：' + data.error.message;
+            }
+            appendMsg('ai', aiText);
+        } catch (e) {
+            appendMsg('ai', '無法連線到AI服務，請檢查網路或API金鑰');
+        }
+    }
+
+    // userInput 自動觸發發送問題
+    userInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            const q = userInput.value.trim();
+            if (q) askAI(q);
+        }
+    });
+
+    // 自動觸發送出按鈕的功能
+    userInput.addEventListener('input', () => {
+        if (userInput.value.trim()) {
+            sendBtn.click();
+        }
+    });
+
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'zh-TW';
+
+    function startVoiceRecognition() {
+        recognition.start();
+    }
+
+    recognition.onresult = (event) => {
+        if (event.results[0].isFinal) { // 確保只處理最終結果
+            const transcript = event.results[0][0].transcript;
+            userInput.value = transcript; // 將語音結果填入輸入框
+            setTimeout(() => {
+                const q = userInput.value.trim();
+                if (q) askAI(q); // 延遲送出，模擬自然輸入
+            }, 500);
+        }
+    };
+
+    recognition.onerror = (event) => {
+        appendMsg('ai', '語音辨識發生錯誤，請再試一次。');
+        console.error('Speech recognition error:', event.error);
+    };
+
+    const voiceButton = document.createElement('button');
+    voiceButton.textContent = '語音輸入';
+    voiceButton.style = 'padding: 10px 22px; border: none; border-radius: 8px; background: linear-gradient(90deg, #b39ddb 60%, #7c4dff 100%); color: #fff; font-size: 1.1rem; font-family: Baloo 2, Microsoft JhengHei, cursive, sans-serif; font-weight: bold; cursor: pointer; box-shadow: 0 1px 6px #b39ddb; margin-left: 8px;';
+    voiceButton.onclick = startVoiceRecognition;
+
+    document.getElementById('inputArea').appendChild(voiceButton);
+
+    appendMsg('ai', '你好！請先輸入 Google Gemini API 金鑰，然後開始提問。');
+    </script>
+</body>
+</html>
